@@ -10,7 +10,7 @@ Indian date format (DD/MM/YYYY) in event listings.
 
 Setup
 
-Clone the repository:git clone https://github.com/manikantavakada/simpleEventScheduler.git
+Clone the repository:git clone https://github.com/manikantavakada/simpleEventSchedulerReactNative.git
 cd simpleEventScheduler
 
 
