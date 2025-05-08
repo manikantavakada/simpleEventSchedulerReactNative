@@ -118,39 +118,6 @@ export const createEvent = async (eventData) => {
   }
 };
 
-export const getEventOccurrences = async (eventId) => {
-  try {
-    const occurrences = await new Promise((resolve, reject) => {
-      db.transaction((tx) => {
-        tx.executeSql(
-          'SELECT * FROM EventOccurrences WHERE eventId = ? ORDER BY date',
-          [eventId],
-          (_, { rows }) => {
-            const results = [];
-            for (let i = 0; i < rows.length; i++) {
-              results.push(rows.item(i));
-            }
-            resolve(results);
-          },
-          (_, error) => reject(new Error(`Failed to fetch occurrences: ${error.message}`))
-        );
-      });
-    });
-
-    const formattedOccurrences = occurrences.map((occ) => ({
-      id: occ.id,
-      date: occ.date,
-      title: occ.title,
-      description: occ.description,
-    }));
-    console.log('Event occurrences fetched:', formattedOccurrences);
-    return { occurrences: formattedOccurrences };
-  } catch (error) {
-    console.error('Error fetching event occurrences:', error);
-    throw new Error('Could not fetch event occurrences');
-  }
-};
-
 export const getOccurrencesByDate = async (selectedDate) => {
   console.log('Fetching occurrences for selected date:', selectedDate);
   try {
@@ -190,14 +157,15 @@ const calculateOccurrences = (event) => {
   const { startDate, endDate, frequency, interval, weekdays, monthDays, occurrences: maxOccurrences, endCondition } = event;
   const result = [];
 
-  // Parse start and end dates
+  // Parse start date and normalize to midnight UTC
   const start = new Date(startDate);
+  const utcYear = start.getUTCFullYear();
+  const utcMonth = start.getUTCMonth();
+  const utcDate = start.getUTCDate();
+  const startDateOnly = new Date(Date.UTC(utcYear, utcMonth, utcDate));
   const end = endDate ? new Date(endDate) : null;
-
-  // Normalize to midnight UTC for date-only comparison
-  const startDateOnly = new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const endDateOnly = end ? new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()) : null;
-  console.log(`Start date only: ${startDateOnly.toISOString()}, End date only: ${endDateOnly?.toISOString()}`);
+  const endDateOnly = end ? new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())) : null;
+  console.log(`Raw startDate: ${startDate}, Parsed start: ${start.toISOString()}, Start date only: ${startDateOnly.toISOString()}, End date only: ${endDateOnly?.toISOString()}`);
 
   let parsedInterval = parseInt(interval) || 1;
   if (parsedInterval <= 0) {
@@ -208,28 +176,17 @@ const calculateOccurrences = (event) => {
   if (frequency === 'weekly') {
     const selectedWeekdays = (weekdays || []).map((day) => day.toLowerCase());
     console.log('Weekly frequency, selected weekdays:', selectedWeekdays);
-    let count = 0;
+    let cycleCount = 0;
     let currentDate = new Date(startDateOnly);
 
-    // If all weekdays are selected, treat as daily within date range
+    // If all weekdays are selected, treat as daily within the selected weeks
     const allWeekdaysSelected = selectedWeekdays.length === 7 &&
       ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
         .every(day => selectedWeekdays.includes(day));
 
-    if (allWeekdaysSelected && parsedInterval === 1) {
-      console.log('All weekdays selected with interval 1, generating daily occurrences');
-      while (currentDate <= endDateOnly && (!maxOccurrences || count < maxOccurrences)) {
-        const date = new Date(currentDate);
-        date.setUTCHours(0, 0, 0, 0); // Normalize to midnight UTC
-        result.push(date.toISOString());
-        count++;
-        console.log(`Added daily occurrence: ${date.toISOString()}, count: ${count}`);
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-        if (maxOccurrences && count >= maxOccurrences) break;
-      }
-    } else {
-      // Standard weekly recurrence
-      while (currentDate <= endDateOnly && (!maxOccurrences || count < maxOccurrences)) {
+    if (allWeekdaysSelected && endCondition === 'date') {
+      console.log('All weekdays selected, generating daily occurrences in selected weeks');
+      while (currentDate <= endDateOnly) {
         const weekStart = new Date(currentDate);
         weekStart.setUTCHours(0, 0, 0, 0);
         console.log(`Processing week starting: ${weekStart.toISOString()}`);
@@ -237,45 +194,111 @@ const calculateOccurrences = (event) => {
           const date = new Date(weekStart);
           date.setUTCDate(weekStart.getUTCDate() + i);
           date.setUTCHours(0, 0, 0, 0);
-          const dayName = date.toLocaleString('en-IN', { weekday: 'long' }).toLowerCase();
+          if (date >= startDateOnly && date <= endDateOnly) {
+            result.push(date.toISOString());
+            console.log(`Added daily occurrence: ${date.toISOString()}`);
+          }
+        }
+        currentDate.setUTCDate(currentDate.getUTCDate() + 7 * parsedInterval);
+      }
+    } else {
+      // Standard weekly recurrence
+      const weekdayMap = {
+        0: 'sunday',
+        1: 'monday',
+        2: 'tuesday',
+        3: 'wednesday',
+        4: 'thursday',
+        5: 'friday',
+        6: 'saturday'
+      };
+      while (endCondition === 'date' ? currentDate <= endDateOnly : cycleCount < maxOccurrences) {
+        const weekStart = new Date(currentDate);
+        weekStart.setUTCHours(0, 0, 0, 0);
+        console.log(`Processing week starting: ${weekStart.toISOString()}`);
+        for (let i = 0; i < 7; i++) {
+          const date = new Date(weekStart);
+          date.setUTCDate(weekStart.getUTCDate() + i);
+          date.setUTCHours(0, 0, 0, 0);
+          const dayIndex = date.getUTCDay();
+          const dayName = weekdayMap[dayIndex];
 
           if (
             selectedWeekdays.includes(dayName) &&
             date >= startDateOnly &&
-            (!endDateOnly || date <= endDateOnly)
+            (endCondition === 'date' ? date <= endDateOnly : true)
           ) {
             result.push(date.toISOString());
-            count++;
-            console.log(`Added weekly occurrence: ${date.toISOString()}, count: ${count}`);
-            if (maxOccurrences && count >= maxOccurrences) break;
+            console.log(`Added weekly occurrence: ${date.toISOString()}`);
           }
         }
+        cycleCount++;
         currentDate.setUTCDate(currentDate.getUTCDate() + 7 * parsedInterval);
-        if (maxOccurrences && count >= maxOccurrences) break;
+        if (endCondition === 'occurrences' && cycleCount >= maxOccurrences) break;
       }
     }
   } else if (frequency === 'monthly') {
     const days = (monthDays || []).map(Number).filter((day) => day >= 1 && day <= 31);
     console.log('Monthly frequency, selected days:', days);
-    let count = 0;
-    let currentDate = new Date(startDateOnly);
+    let cycleCount = 0;
+    let currentDate = new Date(Date.UTC(utcYear, utcMonth, 1)); // Start from the first of the start month
 
-    while (currentDate <= endDateOnly && (!maxOccurrences || count < maxOccurrences)) {
+    while (endCondition === 'date' ? currentDate <= endDateOnly : cycleCount < maxOccurrences) {
+      const currentYear = currentDate.getUTCFullYear();
+      const currentMonth = currentDate.getUTCMonth();
       for (const day of days) {
-        const date = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), day));
+        const date = new Date(Date.UTC(currentYear, currentMonth, day));
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getUTCDate();
+        if (day > daysInMonth) {
+          console.log(`Skipping day ${day} (exceeds ${daysInMonth} days in month)`);
+          continue;
+        }
         console.log(`Checking date: ${date.toISOString()}, day: ${day}`);
-        if (date >= startDateOnly && (!endDateOnly || date <= endDateOnly)) {
+        if (date >= startDateOnly && (endCondition === 'date' ? date <= endDateOnly : true)) {
           result.push(date.toISOString());
-          count++;
-          console.log(`Added monthly occurrence: ${date.toISOString()}, count: ${count}`);
-          if (maxOccurrences && count >= maxOccurrences) break;
+          console.log(`Added monthly occurrence: ${date.toISOString()}`);
         }
       }
-      currentDate.setUTCMonth(currentDate.getUTCMonth() + parsedInterval);
-      if (maxOccurrences && count >= maxOccurrences) break;
+      cycleCount++;
+      currentDate.setUTCMonth(currentMonth + parsedInterval);
+      if (endCondition === 'occurrences' && cycleCount >= maxOccurrences) break;
     }
   }
 
   console.log('Calculated occurrences:', result);
   return result;
+};
+
+export const debugDatabase = async () => {
+  const singleEvents = await new Promise((resolve) => {
+    db.transaction((tx) => {
+      tx.executeSql('SELECT * FROM SingleEvents', [], (_, { rows }) => {
+        const events = [];
+        for (let i = 0; i < rows.length; i++) events.push(rows.item(i));
+        resolve(events);
+      });
+    });
+  });
+  const recurringEvents = await new Promise((resolve) => {
+    db.transaction((tx) => {
+      tx.executeSql('SELECT * FROM RecurringEvents', [], (_, { rows }) => {
+        const events = [];
+        for (let i = 0; i < rows.length; i++) events.push(rows.item(i));
+        resolve(events);
+      });
+    });
+  });
+  const eventOccurrences = await new Promise((resolve) => {
+    db.transaction((tx) => {
+      tx.executeSql('SELECT * FROM EventOccurrences', [], (_, { rows }) => {
+        const events = [];
+        for (let i = 0; i < rows.length; i++) events.push(rows.item(i));
+        resolve(events);
+      });
+    });
+  });
+  console.log('SingleEvents:', singleEvents);
+  console.log('RecurringEvents:', recurringEvents);
+  console.log('EventOccurrences:', eventOccurrences);
+  return { singleEvents, recurringEvents, eventOccurrences };
 };

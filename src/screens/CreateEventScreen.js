@@ -20,6 +20,7 @@ import { createEvent } from "../api/api";
 
 const CreateEventScreen = ({ navigation }) => {
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // Normalize to midnight UTC
   const [newEvent, setNewEvent] = useState({
     title: "",
     description: "",
@@ -51,7 +52,13 @@ const CreateEventScreen = ({ navigation }) => {
     name: `${i + 1}${i + 1 === 1 ? "st" : i + 1 === 2 ? "nd" : i + 1 === 3 ? "rd" : "th"}`,
   }));
 
-  const formatDate = (date) => date.toISOString().split("T")[0];
+  const formatDate = (date) => {
+    const d = new Date(date);
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   const handleAddEvent = async () => {
     console.log("Attempting to create event with data:", newEvent);
@@ -83,9 +90,17 @@ const CreateEventScreen = ({ navigation }) => {
         title: newEvent.title,
         description: newEvent.description || null,
         type: newEvent.type,
-        startDate: newEvent.startDate.toISOString(),
+        startDate: new Date(Date.UTC(
+          newEvent.startDate.getUTCFullYear(),
+          newEvent.startDate.getUTCMonth(),
+          newEvent.startDate.getUTCDate()
+        )).toISOString(),
         ...(newEvent.type === "recurring" && {
-          endDate: newEvent.endCondition === "date" ? newEvent.endDate.toISOString() : null,
+          endDate: newEvent.endCondition === "date" ? new Date(Date.UTC(
+            newEvent.endDate.getUTCFullYear(),
+            newEvent.endDate.getUTCMonth(),
+            newEvent.endDate.getUTCDate()
+          )).toISOString() : null,
           frequency: newEvent.frequency,
           interval: parseInt(newEvent.interval),
           weekdays: newEvent.frequency === "weekly" ? newEvent.weekdays : [],
@@ -97,6 +112,22 @@ const CreateEventScreen = ({ navigation }) => {
       console.log("Submitting event data to API:", eventData);
       const response = await createEvent(eventData);
       console.log("Event successfully created, response:", response);
+      
+      // Navigate to EventDatesScreen with the first occurrence date
+      let navigateDate = newEvent.startDate;
+      if (newEvent.type === "recurring" && newEvent.frequency === "monthly") {
+        const monthDays = newEvent.monthDays.map(Number);
+        const startDay = newEvent.startDate.getUTCDate();
+        if (startDay > Math.min(...monthDays)) {
+          navigateDate = new Date(Date.UTC(
+            newEvent.startDate.getUTCFullYear(),
+            newEvent.startDate.getUTCMonth() + 1,
+            Math.min(...monthDays)
+          ));
+        }
+      }
+      navigation.navigate('EventDatesScreen', { selectedDate: formatDate(navigateDate) });
+
       setNewEvent({
         title: "",
         description: "",
@@ -160,7 +191,14 @@ const CreateEventScreen = ({ navigation }) => {
           minimumDate={today}
           onChange={(event, date) => {
             setShowStartDatePicker(false);
-            if (date) setNewEvent({ ...newEvent, startDate: date });
+            if (date) {
+              const normalizedDate = new Date(Date.UTC(
+                date.getFullYear(),
+                date.getMonth(),
+                date.getDate()
+              ));
+              setNewEvent({ ...newEvent, startDate: normalizedDate });
+            }
           }}
         />
       )}
@@ -207,7 +245,7 @@ const CreateEventScreen = ({ navigation }) => {
                 searchInputStyle={{ color: "#333" }}
                 submitButtonColor="#164289"
                 submitButtonText="Submit"
-                styleDropdownMenuSubsection={[styles.formInput, styles.multiSelect]}
+                styleDropdownMenuSubsection={[styles.formInputmulti, styles.multiSelect]}
                 styleMainWrapper={styles.multiSelectWrapper}
               />
             </>
@@ -267,7 +305,14 @@ const CreateEventScreen = ({ navigation }) => {
                   minimumDate={newEvent.startDate}
                   onChange={(event, date) => {
                     setShowEndDatePicker(false);
-                    if (date) setNewEvent({ ...newEvent, endDate: date });
+                    if (date) {
+                      const normalizedDate = new Date(Date.UTC(
+                        date.getFullYear(),
+                        date.getMonth(),
+                        date.getDate()
+                      ));
+                      setNewEvent({ ...newEvent, endDate: normalizedDate });
+                    }
                   }}
                 />
               )}
@@ -315,12 +360,6 @@ const CreateEventScreen = ({ navigation }) => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate("EventDates")}
-          style={styles.iconButton}
-        >
-          <Image source={require("../assets/arrow.png")} style={styles.icon} />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Event</Text>
         <View style={styles.iconButton} />
       </View>
@@ -359,11 +398,6 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 8,
   },
-  icon: {
-    width: 24,
-    height: 24,
-    tintColor: "#fff",
-  },
   formContent: {
     backgroundColor: "#fff",
     borderRadius: 10,
@@ -379,7 +413,7 @@ const styles = StyleSheet.create({
   formSubtitle: {
     fontSize: 14,
     color: "#333",
-    marginBottom: 5,
+    marginBottom: 15,
   },
   formInput: {
     backgroundColor: "#F9FAFB",
@@ -391,11 +425,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
+  formInputmulti: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
   multiSelect: {
-    height: 100,
+    height: 45,
   },
   multiSelectWrapper: {
-    marginBottom: 10,
+    //marginBottom: 10,
   },
   dateText: {
     fontSize: 14,

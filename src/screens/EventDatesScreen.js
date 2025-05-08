@@ -3,13 +3,13 @@ import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Platform } f
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import CalendarStrip from "react-native-calendar-strip";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import Icon from "react-native-vector-icons/Feather";
 import moment from "moment";
 import "moment/locale/en-in";
 moment.locale("en-in");
-import { getEventOccurrences, getOccurrencesByDate } from "../api/api";
+import { getOccurrencesByDate } from "../api/api";
 
-const EventDatesScreen = ({ route, navigation }) => {
-  const eventId = route?.params?.eventId;
+const EventDatesScreen = ({ navigation }) => {
   const today = new Date();
   const [selectedDate, setSelectedDate] = useState(today.toISOString().split("T")[0]);
   const [occurrences, setOccurrences] = useState([]);
@@ -17,35 +17,20 @@ const EventDatesScreen = ({ route, navigation }) => {
   const calendarRef = useRef(null);
 
   useEffect(() => {
-    console.log("EventDatesScreen mounted, eventId:", eventId, "selectedDate:", selectedDate);
-    if (eventId) {
-      const fetchEventOccurrences = async () => {
-        try {
-          console.log("Fetching occurrences for event ID:", eventId);
-          const data = await getEventOccurrences(eventId);
-          console.log("Event occurrences fetched:", data.occurrences);
-          setOccurrences(data.occurrences);
-        } catch (error) {
-          console.error("Error fetching event occurrences:", error);
-          alert("Failed to load event occurrences");
-        }
-      };
-      fetchEventOccurrences();
-    } else {
-      const fetchDateOccurrences = async () => {
-        try {
-          console.log("Fetching occurrences for date:", selectedDate);
-          const data = await getOccurrencesByDate(selectedDate);
-          console.log("Date occurrences fetched:", data.occurrences);
-          setOccurrences(data.occurrences);
-        } catch (error) {
-          console.error("Error fetching date occurrences:", error);
-          alert("Failed to load events for this date");
-        }
-      };
-      fetchDateOccurrences();
-    }
-  }, [eventId, selectedDate]);
+    console.log("EventDatesScreen mounted, selectedDate:", selectedDate);
+    const fetchDateOccurrences = async () => {
+      try {
+        console.log("Fetching occurrences for date:", selectedDate);
+        const data = await getOccurrencesByDate(selectedDate);
+        console.log("Date occurrences fetched:", data.occurrences);
+        setOccurrences(data.occurrences);
+      } catch (error) {
+        console.error("Error fetching date occurrences:", error);
+        alert("Failed to load events for this date");
+      }
+    };
+    fetchDateOccurrences();
+  }, [selectedDate]);
 
   const onDatePickerChange = (event, selected) => {
     if (Platform.OS === "android") {
@@ -87,9 +72,7 @@ const EventDatesScreen = ({ route, navigation }) => {
   const renderHeader = () => (
     <>
       {occurrences.length === 0 && (
-        <Text style={styles.noAppointments}>
-          {eventId ? "No Occurrences Found" : "No Events on this Date"}
-        </Text>
+        <Text style={styles.noAppointments}>No Events on this Date</Text>
       )}
     </>
   );
@@ -97,45 +80,37 @@ const EventDatesScreen = ({ route, navigation }) => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
-          <Image source={require("../assets/arrow.png")} style={styles.icon} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {eventId ? "Event Occurrences" : "Events on Selected Date"}
-        </Text>
+        
+        <Text style={styles.headerTitle}>Events</Text>
         <TouchableOpacity
           style={styles.iconButton}
           onPress={() => setShowDatePicker(true)}
         >
-          <Text style={styles.datePickerText}>
-            {moment(selectedDate, "YYYY-MM-DD").format("DD/MM/YYYY")}
-          </Text>
+          <Icon name="calendar" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-      {!eventId && (
-        <View style={styles.calendarContainer}>
-          <CalendarStrip
-            ref={calendarRef}
-            scrollable
-            style={styles.calendar}
-            calendarColor={"#fff"}
-            calendarHeaderStyle={{ color: "#164289", fontSize: 18, fontWeight: "700" }}
-            highlightDateNumberStyle={{ color: "#fff" }}
-            highlightDateNameStyle={{ color: "#fff" }}
-            highlightDateContainerStyle={{ backgroundColor: "#164289", borderRadius: 15 }}
-            dateNumberStyle={{ color: "#333" }}
-            dateNameStyle={{ color: "#6B7280" }}
-            selectedDate={moment(selectedDate, "YYYY-MM-DD")}
-            onDateSelected={(date) => {
-              const formattedDate = date.format("YYYY-MM-DD");
-              console.log("Selected date in CalendarStrip:", formattedDate);
-              setSelectedDate(formattedDate);
-            }}
-            startingDate={moment()}
-            onLayout={() => console.log("CalendarStrip rendered")}
-          />
-        </View>
-      )}
+      <View style={styles.calendarContainer}>
+        <CalendarStrip
+          ref={calendarRef}
+          scrollable
+          style={styles.calendar}
+          calendarColor={"#fff"}
+          calendarHeaderStyle={{ color: "#164289", fontSize: 18, fontWeight: "700" }}
+          highlightDateNumberStyle={{ color: "#fff" }}
+          highlightDateNameStyle={{ color: "#fff" }}
+          highlightDateContainerStyle={{ backgroundColor: "#164289", borderRadius: 15 }}
+          dateNumberStyle={{ color: "#333" }}
+          dateNameStyle={{ color: "#6B7280" }}
+          selectedDate={moment(selectedDate, "YYYY-MM-DD")}
+          onDateSelected={(date) => {
+            const formattedDate = date.format("YYYY-MM-DD");
+            console.log("Selected date in CalendarStrip:", formattedDate);
+            setSelectedDate(formattedDate);
+          }}
+          startingDate={moment()}
+          onLayout={() => console.log("CalendarStrip rendered")}
+        />
+      </View>
       <FlatList
         data={occurrences}
         keyExtractor={(item) => item.id}
@@ -187,20 +162,15 @@ const styles = StyleSheet.create({
     height: 24,
     tintColor: "#fff",
   },
-  datePickerText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
   calendarContainer: {
     backgroundColor: "#fff",
     paddingTop: 10,
   },
   calendar: {
     width: "100%",
-    height: 120,
+    height: 100,
     backgroundColor: "#fff",
-    marginBottom: 20,
+   
   },
   card: {
     flexDirection: "row",
