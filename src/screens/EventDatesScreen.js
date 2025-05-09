@@ -9,18 +9,26 @@ import "moment/locale/en-in";
 moment.locale("en-in");
 import { getOccurrencesByDate } from "../api/api";
 
+// Component for displaying events on a selected date
 const EventDatesScreen = ({ navigation }) => {
+  // Initialize today's date for default selection
   const today = new Date();
+  // State for the currently selected date (YYYY-MM-DD format)
   const [selectedDate, setSelectedDate] = useState(today.toISOString().split("T")[0]);
+  // State for storing event occurrences fetched for the selected date
   const [occurrences, setOccurrences] = useState([]);
+  // State to control visibility of the date picker
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // Reference to the CalendarStrip component for programmatic updates
   const calendarRef = useRef(null);
 
+  // Fetch event occurrences when the selected date changes
   useEffect(() => {
     console.log("EventDatesScreen mounted, selectedDate:", selectedDate);
     const fetchDateOccurrences = async () => {
       try {
         console.log("Fetching occurrences for date:", selectedDate);
+        // Call API to get events for the selected date
         const data = await getOccurrencesByDate(selectedDate);
         console.log("Date occurrences fetched:", data.occurrences);
         setOccurrences(data.occurrences);
@@ -32,21 +40,26 @@ const EventDatesScreen = ({ navigation }) => {
     fetchDateOccurrences();
   }, [selectedDate]);
 
+  // Handle date selection from the DateTimePicker
   const onDatePickerChange = (event, selected) => {
     if (Platform.OS === "android") {
+      // Hide picker on Android after selection
       setShowDatePicker(false);
     }
     if (selected) {
+      // Format selected date to YYYY-MM-DD
       const formattedDate = moment(selected).format("YYYY-MM-DD");
       console.log("Date picker selected:", formattedDate);
       setSelectedDate(formattedDate);
       if (calendarRef.current) {
+        // Update CalendarStrip to reflect the selected date
         console.log("Updating CalendarStrip to:", formattedDate);
         calendarRef.current.updateSelectedDate(moment(formattedDate, "YYYY-MM-DD"));
       }
     }
   };
 
+  // Render a single event occurrence card
   const renderOccurrence = ({ item }) => {
     console.log("Rendering occurrence:", item);
     return (
@@ -69,6 +82,7 @@ const EventDatesScreen = ({ navigation }) => {
     );
   };
 
+  // Render header text when no events are found
   const renderHeader = () => (
     <>
       {occurrences.length === 0 && (
@@ -77,10 +91,11 @@ const EventDatesScreen = ({ navigation }) => {
     </>
   );
 
+  // Render the screen with header, calendar, and event list
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      
       <View style={styles.header}>
-        
         <Text style={styles.headerTitle}>Events</Text>
         <TouchableOpacity
           style={styles.iconButton}
@@ -89,6 +104,7 @@ const EventDatesScreen = ({ navigation }) => {
           <Icon name="calendar" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
+      
       <View style={styles.calendarContainer}>
         <CalendarStrip
           ref={calendarRef}
@@ -103,14 +119,18 @@ const EventDatesScreen = ({ navigation }) => {
           dateNameStyle={{ color: "#6B7280" }}
           selectedDate={moment(selectedDate, "YYYY-MM-DD")}
           onDateSelected={(date) => {
+            // Update selected date when user picks a date in CalendarStrip
             const formattedDate = date.format("YYYY-MM-DD");
             console.log("Selected date in CalendarStrip:", formattedDate);
             setSelectedDate(formattedDate);
           }}
           startingDate={moment()}
+          minDate={moment().subtract(5, "years")} // Allow 5 years in the past
+          maxDate={moment().add(5, "years")} // Allow 5 years in the future
           onLayout={() => console.log("CalendarStrip rendered")}
         />
       </View>
+      
       <FlatList
         data={occurrences}
         keyExtractor={(item) => item.id}
@@ -119,6 +139,7 @@ const EventDatesScreen = ({ navigation }) => {
         contentContainerStyle={styles.container}
         ListEmptyComponent={null}
       />
+      
       {showDatePicker && (
         <DateTimePicker
           value={new Date(selectedDate)}
@@ -132,6 +153,7 @@ const EventDatesScreen = ({ navigation }) => {
   );
 };
 
+// Styles for the EventDatesScreen component
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -170,7 +192,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 100,
     backgroundColor: "#fff",
-   
   },
   card: {
     flexDirection: "row",
