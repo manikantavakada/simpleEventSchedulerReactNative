@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   FlatList,
   Platform,
@@ -11,32 +10,37 @@ import {
   ToastAndroid
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Icon from "react-native-vector-icons/Feather";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import MultiSelect from "react-native-multiple-select";
-
 import { createEvent } from "../api/api";
 
+// Component for creating single or recurring events
 const CreateEventScreen = ({ navigation }) => {
+  // Initialize today's date, normalized to midnight UTC
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize to midnight UTC
+  today.setHours(0, 0, 0, 0);
+
+  // State to manage form inputs for the new event
   const [newEvent, setNewEvent] = useState({
     title: "",
     description: "",
-    type: "single",
+    type: "single", // Single or recurring event
     startDate: today,
     endDate: today,
-    frequency: "weekly",
-    interval: "1",
-    weekdays: [],
-    monthDays: [],
-    endCondition: "date",
-    occurrences: "5",
+    frequency: "weekly", // Weekly or monthly for recurring events
+    interval: "", // Interval between occurrences
+    weekdays: [], // Selected weekdays for weekly events
+    monthDays: [], // Selected days for monthly events
+    endCondition: "date", // End by date or number of occurrences
+    occurrences: "", // Number of occurrences for recurring events
   });
+
+  // State to control visibility of date pickers
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
+  // Options for weekday selection in MultiSelect
   const weekdaysOptions = [
     { id: "Monday", name: "Monday" },
     { id: "Tuesday", name: "Tuesday" },
@@ -47,11 +51,13 @@ const CreateEventScreen = ({ navigation }) => {
     { id: "Sunday", name: "Sunday" },
   ];
 
+  // Options for day-of-month selection (1st to 31st)
   const monthDaysOptions = Array.from({ length: 31 }, (_, i) => ({
     id: (i + 1).toString(),
     name: `${i + 1}${i + 1 === 1 ? "st" : i + 1 === 2 ? "nd" : i + 1 === 3 ? "rd" : "th"}`,
   }));
 
+  // Format date as DD/MM/YYYY for display
   const formatDate = (date) => {
     const d = new Date(date);
     const day = String(d.getUTCDate()).padStart(2, '0');
@@ -60,8 +66,11 @@ const CreateEventScreen = ({ navigation }) => {
     return `${day}/${month}/${year}`;
   };
 
+  // Handle form submission to create a new event
   const handleAddEvent = async () => {
     console.log("Attempting to create event with data:", newEvent);
+
+    // Validate required fields
     if (!newEvent.title.trim()) {
       alert("Please enter an event title");
       return;
@@ -86,6 +95,7 @@ const CreateEventScreen = ({ navigation }) => {
     }
 
     try {
+      // Prepare event data for API submission, normalizing dates to UTC
       const eventData = {
         title: newEvent.title,
         description: newEvent.description || null,
@@ -110,10 +120,12 @@ const CreateEventScreen = ({ navigation }) => {
         }),
       };
       console.log("Submitting event data to API:", eventData);
+
+      // Call API to create the event
       const response = await createEvent(eventData);
       console.log("Event successfully created, response:", response);
-      
-      // Navigate to EventDatesScreen with the first occurrence date
+
+      // Determine the date to navigate to (first occurrence for monthly events)
       let navigateDate = newEvent.startDate;
       if (newEvent.type === "recurring" && newEvent.frequency === "monthly") {
         const monthDays = newEvent.monthDays.map(Number);
@@ -126,8 +138,8 @@ const CreateEventScreen = ({ navigation }) => {
           ));
         }
       }
-      navigation.navigate('EventDatesScreen', { selectedDate: formatDate(navigateDate) });
 
+      // Reset form after successful submission
       setNewEvent({
         title: "",
         description: "",
@@ -135,12 +147,14 @@ const CreateEventScreen = ({ navigation }) => {
         startDate: today,
         endDate: today,
         frequency: "weekly",
-        interval: "1",
+        interval: "",
         weekdays: [],
         monthDays: [],
         endCondition: "date",
-        occurrences: "5",
+        occurrences: "",
       });
+
+      // Show success message
       ToastAndroid.show('Event is scheduled', ToastAndroid.SHORT);
     } catch (error) {
       console.error("Failed to create event:", error);
@@ -148,9 +162,11 @@ const CreateEventScreen = ({ navigation }) => {
     }
   };
 
+  // Render the event creation form
   const renderForm = () => (
     <View style={styles.formContent}>
       <Text style={styles.formTitle}>Add New Event</Text>
+      
       <TextInput
         style={styles.formInput}
         placeholder="Event Title *"
@@ -158,6 +174,7 @@ const CreateEventScreen = ({ navigation }) => {
         value={newEvent.title}
         onChangeText={(text) => setNewEvent({ ...newEvent, title: text })}
       />
+     
       <TextInput
         style={styles.formInput}
         placeholder="Description (optional)"
@@ -166,6 +183,7 @@ const CreateEventScreen = ({ navigation }) => {
         onChangeText={(text) => setNewEvent({ ...newEvent, description: text })}
         multiline
       />
+  
       <Text style={styles.formSubtitle}>Event Type</Text>
       <Picker
         selectedValue={newEvent.type}
@@ -175,6 +193,7 @@ const CreateEventScreen = ({ navigation }) => {
         <Picker.Item label="Single" value="single" />
         <Picker.Item label="Recurring" value="recurring" />
       </Picker>
+
       <TouchableOpacity
         style={styles.formInput}
         onPress={() => setShowStartDatePicker(true)}
@@ -192,6 +211,7 @@ const CreateEventScreen = ({ navigation }) => {
           onChange={(event, date) => {
             setShowStartDatePicker(false);
             if (date) {
+              // Normalize selected date to UTC midnight
               const normalizedDate = new Date(Date.UTC(
                 date.getFullYear(),
                 date.getMonth(),
@@ -202,6 +222,7 @@ const CreateEventScreen = ({ navigation }) => {
           }}
         />
       )}
+      
       {newEvent.type === "recurring" && (
         <>
           <Text style={styles.formSubtitle}>Frequency</Text>
@@ -213,6 +234,7 @@ const CreateEventScreen = ({ navigation }) => {
             <Picker.Item label="Weekly" value="weekly" />
             <Picker.Item label="Monthly" value="monthly" />
           </Picker>
+     
           <TextInput
             style={styles.formInput}
             placeholder={`Interval (every n ${newEvent.frequency === "weekly" ? "weeks" : "months"}) *`}
@@ -223,6 +245,7 @@ const CreateEventScreen = ({ navigation }) => {
           />
           {newEvent.frequency === "weekly" ? (
             <>
+              
               <Text style={styles.formSubtitle}>Weekdays *</Text>
               <MultiSelect
                 items={weekdaysOptions}
@@ -251,6 +274,7 @@ const CreateEventScreen = ({ navigation }) => {
             </>
           ) : (
             <>
+            
               <Text style={styles.formSubtitle}>Days of Month *</Text>
               <MultiSelect
                 items={monthDaysOptions}
@@ -278,6 +302,7 @@ const CreateEventScreen = ({ navigation }) => {
               />
             </>
           )}
+        
           <Text style={styles.formSubtitle}>End Condition</Text>
           <Picker
             selectedValue={newEvent.endCondition}
@@ -289,6 +314,7 @@ const CreateEventScreen = ({ navigation }) => {
           </Picker>
           {newEvent.endCondition === "date" ? (
             <>
+              
               <TouchableOpacity
                 style={styles.formInput}
                 onPress={() => setShowEndDatePicker(true)}
@@ -306,6 +332,7 @@ const CreateEventScreen = ({ navigation }) => {
                   onChange={(event, date) => {
                     setShowEndDatePicker(false);
                     if (date) {
+                      // Normalize selected date to UTC midnight
                       const normalizedDate = new Date(Date.UTC(
                         date.getFullYear(),
                         date.getMonth(),
@@ -329,6 +356,7 @@ const CreateEventScreen = ({ navigation }) => {
           )}
         </>
       )}
+      
       <View style={styles.formButtons}>
         <TouchableOpacity style={styles.formButton} onPress={handleAddEvent}>
           <Text style={styles.formButtonText}>Save</Text>
@@ -357,6 +385,7 @@ const CreateEventScreen = ({ navigation }) => {
     </View>
   );
 
+  // Render the screen with a header and form inside a FlatList
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.header}>
@@ -373,6 +402,7 @@ const CreateEventScreen = ({ navigation }) => {
   );
 };
 
+// Styles for the CreateEventScreen component
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
